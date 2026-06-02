@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -21,63 +21,69 @@ trap cleanup EXIT
 echo "=== P0: Messaging Pipeline Test ==="
 echo ""
 
+# ---- 1. Setup ----
 echo "1. Starting NATS..."
 docker compose -f "$ROOT_DIR/docker-compose.yml" up -d
 sleep 2
 
-echo "2. Building agent service..."
+echo "2. Building binaries..."
 go build -o /tmp/constellation-agent "$ROOT_DIR/cmd/agent"
+go build -o /tmp/p0test "$ROOT_DIR/cmd/p0test"
 
-echo "3. Starting agent (constellation-router)..."
+# ---- 2. Pub/Sub Flow ----
+echo ""
+echo "--- Pub/Sub Flow ---"
+
 /tmp/constellation-agent -model constellation-router -subject "constellation.event.>" &
 AGENT_PID=$!
-sleep 2
+sleep 3
 
-echo "4. Publishing test event via NATS..."
-RESPONSE=$(go run "$ROOT_DIR/cmd/agent" -model constellation-router <<'EOF' 2>&1 &
-constellation.event.>
-EOF
-)
+OUTPUT=$(/tmp/p0test -prompt "Say hello in one word" 2>&1)
+echo "$OUTPUT"
+echo ""
 
-# Use nats CLI or go run a tool to publish and receive
-EVENT_ID=$(uuidgen 2>/dev/null || echo "test-$(date +%s)")
-
-# Publish a request event and wait for reply using nats request
-if command -v nats &>/dev/null; then
-  echo "   Publishing request via nats CLI..."
-  REPLY=$(echo '{"id":"test","type":"request","source":"p0-test","data":{"prompt":"Say hello in one word"}}' | \
-    nats request "constellation.event.request" 2>&1)
-  echo "   Reply: $REPLY"
-  if echo "$REPLY" | grep -qi "hello"; then
-    pass "Agent responded to request"
-  else
-    fail "Agent did not respond properly"
-  fi
+if echo "$OUTPUT" | grep -q "Result:"; then
+  pass "Agent responded to request"
 else
-  echo "   nats CLI not found, skipping publish test"
-  fail "nats CLI required for test"
+  fail "Agent did not respond properly"
 fi
 
+if echo "$OUTPUT" | grep -q "CorrelationID:"; then
+  pass "Correlation tracking works"
+else
+  fail "Missing correlation ID"
+fi
+
+# ---- 3. JetStream Durability ----
 echo ""
-echo "5. Testing JetStream durability..."
-echo "   Restarting NATS..."
+echo "--- JetStream Durability ---"
+
+echo "Creating test stream..."
+nats stream add test-events --subjects "constellation.durability.>" --storage file --replicas 1 --defaults 2>&1 || true
+
+echo "Publishing durability test message..."
+nats pub "constellation.durability.test" '{"msg":"hello"}' 2>&1
+sleep 1
+
+BEFORE=$(nats stream info test-events 2>&1 | grep -oP 'Messages:\s+\K\d+' || echo "0")
+echo "Messages before restart: $BEFORE"
+
+echo "Restarting NATS..."
 docker compose -f "$ROOT_DIR/docker-compose.yml" restart nats
 sleep 3
 
-# Check event survived via stream info
-if command -v nats &>/dev/null; then
-  STREAM_INFO=$(nats stream info events 2>&1 || true)
-  MSG_COUNT=$(echo "$STREAM_INFO" | grep -i "messages" | head -1 | grep -oP '\d+' || echo "0")
-  if [ "$MSG_COUNT" -gt 0 ]; then
-    pass "Events survived NATS restart ($MSG_COUNT messages)"
-  else
-    fail "No messages found after restart"
-  fi
+AFTER=$(nats stream info test-events 2>&1 | grep -oP 'Messages:\s+\K\d+' || echo "0")
+echo "Messages after restart: $AFTER"
+
+if [ "${AFTER:-0}" = "${BEFORE:-0}" ] && [ "${AFTER:-0}" -gt 0 ]; then
+  pass "Events survived NATS restart ($AFTER messages)"
+else
+  fail "Messages lost after restart (before=${BEFORE:-0}, after=${AFTER:-0})"
 fi
+
+nats stream rm test-events --force 2>&1 || true
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 
-if [ "$FAIL" -gt 0 ]; then
-  exit 1
-fi
+[ "$FAIL" -eq 0 ]
