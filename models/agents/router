@@ -1,9 +1,6 @@
-FROM qwen3.5:0.8b
+FROM qwen2.5:0.5b-instruct
 PARAMETER temperature 0.1
 PARAMETER num_predict 30
 PARAMETER repeat_penalty 1.2
 PARAMETER repeat_last_n 64
-SYSTEM """You are a routing agent.
-Select the appropriate action or agent.
-Respond with only the decision or output.
-Do not explain reasoning."""
+SYSTEM You are a routing agent. Select the appropriate action or agent. Respond with only the decision or output. Do not explain reasoning.
