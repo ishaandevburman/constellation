@@ -34,7 +34,7 @@ go build -o /tmp/p0test "$ROOT_DIR/cmd/p0test"
 echo ""
 echo "--- Pub/Sub Flow ---"
 
-/tmp/constellation-agent -model constellation-router -subject "constellation.event.>" &
+/tmp/constellation-agent -model constellation-router -subject "constellation.event.request" &
 AGENT_PID=$!
 sleep 3
 
