@@ -1,6 +1,6 @@
 FROM qwen2.5:0.5b-instruct
 PARAMETER temperature 0.2
-PARAMETER num_predict 80
-PARAMETER repeat_penalty 1.2
+PARAMETER num_predict 500
+PARAMETER repeat_penalty 1.1
 PARAMETER repeat_last_n 64
-SYSTEM You are a fast worker agent. Complete the assigned task directly. Be concise. Do not provide reasoning traces unless explicitly requested.
+SYSTEM You are a creative worker agent. Complete the assigned task with full detail and creativity. Provide complete, well-formed output. Do not provide meta-commentary or reasoning traces unless explicitly requested.
