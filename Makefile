@@ -1,4 +1,4 @@
-.PHONY: up down run-publisher run-consumer run-agent run-ingress run-orchestrator run-p0test test-p0 test-p1 test-p2 build clean
+.PHONY: up down run-publisher run-consumer run-agent run-ingress run-orchestrator run-observer run-p0test test-p0 test-p1 test-p2 build clean
 
 up:
 	docker compose up -d
@@ -20,6 +20,9 @@ run-ingress:
 
 run-orchestrator:
 	go run ./cmd/orchestrator
+
+run-observer:
+	go run ./cmd/observer
 
 run-p0test:
 	go run ./cmd/p0test
