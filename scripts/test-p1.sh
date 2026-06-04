@@ -30,7 +30,7 @@ go build -o /tmp/constellation-agent "$ROOT_DIR/cmd/agent"
 go build -o /tmp/ingress "$ROOT_DIR/cmd/ingress"
 
 echo "3. Starting worker agent..."
-/tmp/constellation-agent -model constellation-worker -subject "constellation.event.>" &
+/tmp/constellation-agent -model constellation-worker -subject "constellation.event.request" &
 AGENT_PID=$!
 sleep 3
 
@@ -47,20 +47,42 @@ else
 fi
 
 echo ""
-echo "5. Testing restart survival..."
-echo "   Restarting NATS..."
-docker compose -f "$ROOT_DIR/docker-compose.yml" restart nats
+echo "5. Testing agent restart recovery..."
+echo "   Killing agent..."
+kill "$AGENT_PID"
+wait "$AGENT_PID" 2>/dev/null
+
+echo "   Restarting agent..."
+/tmp/constellation-agent -model constellation-worker -subject "constellation.event.request" &
+AGENT_PID=$!
 sleep 3
 
-echo "   Sending prompt after restart..."
+echo "   Sending prompt after agent restart..."
 OUTPUT2=$(echo "Hello again" | /tmp/ingress -timeout 30s 2>&1)
 INGRESS_EXIT2=$?
 echo "   Response: $OUTPUT2"
 
 if [ "$INGRESS_EXIT2" -eq 0 ] && [ -n "$OUTPUT2" ]; then
+  pass "Ingress works after agent restart"
+else
+  fail "Ingress failed after agent restart (exit=$INGRESS_EXIT2)"
+fi
+
+echo ""
+echo "6. Testing NATS restart survival..."
+echo "   Restarting NATS..."
+docker compose -f "$ROOT_DIR/docker-compose.yml" restart nats
+sleep 3
+
+echo "   Sending prompt after NATS restart..."
+OUTPUT3=$(echo "Hello once more" | /tmp/ingress -timeout 30s 2>&1)
+INGRESS_EXIT3=$?
+echo "   Response: $OUTPUT3"
+
+if [ "$INGRESS_EXIT3" -eq 0 ] && [ -n "$OUTPUT3" ]; then
   pass "Ingress works after NATS restart"
 else
-  fail "Ingress failed after restart (exit=$INGRESS_EXIT2)"
+  fail "Ingress failed after NATS restart (exit=$INGRESS_EXIT3)"
 fi
 
 echo ""

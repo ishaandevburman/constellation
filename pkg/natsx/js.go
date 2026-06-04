@@ -10,6 +10,7 @@ import (
 type StreamConfig struct {
 	Name     string
 	Subjects []string
+	NoAck    bool
 }
 
 func (c *Client) EnsureStream(ctx context.Context, cfg StreamConfig) (jetstream.Stream, error) {
@@ -17,6 +18,7 @@ func (c *Client) EnsureStream(ctx context.Context, cfg StreamConfig) (jetstream.
 		Name:     cfg.Name,
 		Subjects: cfg.Subjects,
 		Storage:  jetstream.FileStorage,
+		NoAck:    cfg.NoAck,
 	})
 	if err == nil {
 		return s, nil

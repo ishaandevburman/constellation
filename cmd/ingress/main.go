@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,8 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ishaan/constellation/internal/subjects"
 	"github.com/ishaan/constellation/pkg/event"
-	"github.com/nats-io/nats.go"
+	"github.com/ishaan/constellation/pkg/natsx"
 )
 
 func main() {
@@ -32,11 +34,21 @@ func main() {
 		log.Fatal("no prompt provided")
 	}
 
-	nc, err := nats.Connect(nats.DefaultURL)
+	nc, err := natsx.Connect(natsx.DefaultConfig("ingress"))
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
 	defer nc.Close()
+
+	ctx := context.Background()
+	_, err = nc.EnsureStream(ctx, natsx.StreamConfig{
+		Name:     "events",
+		Subjects: []string{subjects.Prefix + ".event.>"},
+		NoAck:    true,
+	})
+	if err != nil {
+		log.Fatalf("ensure stream: %v", err)
+	}
 
 	e := event.New(event.TypeRequest, "cli")
 	e.CorrelationID = e.ID
@@ -44,10 +56,13 @@ func main() {
 
 	payload, _ := e.Marshal()
 
-	resp, err := nc.Request(*subj, payload, *timeout)
+	log.Printf("sending request on %s", *subj)
+	resp, err := nc.Conn.Request(*subj, payload, *timeout)
 	if err != nil {
 		log.Fatalf("request failed: %v", err)
 	}
+
+	log.Printf("got response (%d bytes)", len(resp.Data))
 
 	respEvent, err := event.Unmarshal(resp.Data)
 	if err != nil {
