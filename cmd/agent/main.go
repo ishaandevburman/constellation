@@ -17,7 +17,7 @@ import (
 
 func main() {
 	model := flag.String("model", "constellation-worker", "Ollama model name")
-	subj := flag.String("subject", subjects.AllEvents, "NATS subject to subscribe to")
+	subj := flag.String("subject", subjects.EventSubject("request"), "NATS subject to subscribe to")
 	ollamaURL := flag.String("ollama-url", "http://localhost:11434", "Ollama API base URL")
 	flag.Parse()
 
@@ -34,6 +34,15 @@ func run(ctx context.Context, model, subj, ollamaURL string) error {
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer nc.Close()
+
+	_, err = nc.EnsureStream(ctx, natsx.StreamConfig{
+		Name:     "events",
+		Subjects: []string{subjects.Prefix + ".event.>"},
+		NoAck:    true,
+	})
+	if err != nil {
+		return fmt.Errorf("ensure stream: %w", err)
+	}
 
 	oll := ollama.NewClient(ollamaURL)
 
@@ -66,10 +75,10 @@ func run(ctx context.Context, model, subj, ollamaURL string) error {
 			respErr.CorrelationID = e.CorrelationID
 			respErr.Data, _ = json.Marshal(map[string]string{"error": err.Error()})
 			payload, _ := respErr.Marshal()
+			nc.Conn.Publish(subjects.EventSubject(string(event.TypeError)), payload)
 			if reply := msg.Reply; reply != "" {
 				nc.Conn.Publish(reply, payload)
 			}
-			nc.Conn.Publish(subjects.EventSubject(string(event.TypeError)), payload)
 			return
 		}
 
@@ -83,10 +92,11 @@ func run(ctx context.Context, model, subj, ollamaURL string) error {
 			return
 		}
 
+		nc.Conn.Publish(subjects.EventSubject(string(event.TypeResponse)), payload)
+
 		if reply := msg.Reply; reply != "" {
 			nc.Conn.Publish(reply, payload)
 		}
-		nc.Conn.Publish(subjects.EventSubject(string(event.TypeResponse)), payload)
 
 		log.Printf("published response %s", resp.ID)
 	})

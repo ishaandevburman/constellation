@@ -1,4 +1,4 @@
-.PHONY: up down run-publisher run-consumer run-agent test-p0 build clean
+.PHONY: up down run-publisher run-consumer run-agent run-ingress run-p0test test-p0 test-p1 build clean
 
 up:
 	docker compose up -d
@@ -15,8 +15,17 @@ run-consumer:
 run-agent:
 	go run ./cmd/agent
 
+run-ingress:
+	go run ./cmd/ingress
+
+run-p0test:
+	go run ./cmd/p0test
+
 test-p0:
 	scripts/test-p0.sh
+
+test-p1:
+	scripts/test-p1.sh
 
 build:
 	go build ./...
