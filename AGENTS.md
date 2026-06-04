@@ -11,6 +11,7 @@ Constellation — a distributed multi-agent runtime built on NATS (Go). Event-dr
 - `make run-agent` — run generic agent (NATS ↔ Ollama)
 - `make run-ingress` — run CLI ingress (stdin → NATS → stdout)
 - `make run-orchestrator` — run orchestrator (routes tasks between agents)
+- `make run-observer` — run event observer (replay + live tail)
 - `make run-p0test` — run P0 test binary directly
 - `make test-p0` — run P0 messaging foundation test
 - `make test-p1` — run P1 single-agent test
